@@ -49,8 +49,18 @@ httpServer.listen(WS_PORT, () =>
   console.log(`[server] Listening on :${WS_PORT}`)
 );
 
-// WS ko httpServer pe attach karo
-const wss2 = new WebSocketServer({ server: httpServer });
+// WS upgrade ko manually handle karo
+const wss2 = new WebSocketServer({ noServer: true });
+
+httpServer.on("upgrade", (req, socket, head) => {
+  if (req.url === "/tunnel") {
+    wss2.handleUpgrade(req, socket, head, (ws) => {
+      wss2.emit("connection", ws, req);
+    });
+  } else {
+    socket.destroy();
+  }
+});
 wss2.on('connection', (ws, req) => {
   if (req.url !== '/tunnel') { ws.close(); return; }
   tunnels.add(ws);
