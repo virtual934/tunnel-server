@@ -49,23 +49,10 @@ httpServer.listen(WS_PORT, () =>
   console.log(`[server] Listening on :${WS_PORT}`)
 );
 
-// WS upgrade ko manually handle karo
-const wss2 = new WebSocketServer({ noServer: true });
+// WS ko httpServer pe attach karo
+const wss2 = new WebSocketServer({ server: httpServer });
 
-httpServer.on("upgrade", (req, socket, head) => {
-  if (req.url.startsWith("/tunnel")) {
-    wss2.handleUpgrade(req, socket, head, (ws) => {
-      wss2.emit("connection", ws, req);
-    });
-  } else {
-    socket.destroy();
-  }
-});
-wss2.on('connection', (ws, req) => {
-  if (!req.url.startsWith('/tunnel')) {
-    ws.close();
-    return;
-  }
+wss2.on('connection', (ws) => {
   tunnels.add(ws);
   console.log(`[+] Tunnel connected  (active: ${tunnels.size})`);
 
@@ -74,8 +61,10 @@ wss2.on('connection', (ws, req) => {
     try { msg = JSON.parse(raw); } catch { return; }
     const entry = pending.get(msg.id);
     if (!entry) return;
+
     clearTimeout(entry.timer);
     pending.delete(msg.id);
+
     const body = Buffer.from(msg.body ?? '', 'base64');
     entry.res.writeHead(msg.status ?? 200, msg.headers ?? {});
     entry.res.end(body);
