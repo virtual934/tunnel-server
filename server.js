@@ -53,7 +53,7 @@ httpServer.listen(WS_PORT, () =>
 const wss2 = new WebSocketServer({ noServer: true });
 
 httpServer.on("upgrade", (req, socket, head) => {
-  if (req.url === "/tunnel") {
+  if (req.url.startsWith("/tunnel")) {
     wss2.handleUpgrade(req, socket, head, (ws) => {
       wss2.emit("connection", ws, req);
     });
@@ -62,7 +62,10 @@ httpServer.on("upgrade", (req, socket, head) => {
   }
 });
 wss2.on('connection', (ws, req) => {
-  if (req.url !== '/tunnel') { ws.close(); return; }
+  if (!req.url.startsWith('/tunnel')) {
+    ws.close();
+    return;
+  }
   tunnels.add(ws);
   console.log(`[+] Tunnel connected  (active: ${tunnels.size})`);
 
