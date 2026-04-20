@@ -49,6 +49,13 @@ httpServer.listen(WS_PORT, () =>
   console.log(`[server] Listening on :${WS_PORT}`)
 );
 
+httpServer.on("request", (req, res) => {
+  console.log("HTTP HIT:", req.url);
+
+  res.writeHead(200, { "content-type": "text/plain" });
+  res.end("Server is running");
+});
+
 // WS ko httpServer pe attach karo
 const wss2 = new WebSocketServer({ server: httpServer });
 
