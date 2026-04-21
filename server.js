@@ -2,15 +2,20 @@ import { WebSocketServer, WebSocket } from 'ws';
 import http from 'http';
 import { randomUUID } from 'crypto';
 
-const WS_PORT = process.env.WS_PORT || process.env.PORT || 3001; // Render auto-assign karta hai PORT
-// const HTTP_PORT = process.env.HTTP_PORT || 8080;
+const PORT = process.env.PORT || 3001;
 
-const pending = new Map(); // reqId → { res, timer }
-const tunnels = new Set(); // connected tunnel clients
+const pending = new Map();
+const tunnels = new Set();
 
-// ── HTTP Server ───────────────────────────────────────────────────────────────
-// Note: Render pe ek hi port hota hai, isliye WS aur HTTP dono ek hi server pe
+// ── Single HTTP Server ────────────────────────────────────────────────────────
 const httpServer = http.createServer((req, res) => {
+  // Health check for Render
+  if (req.url === '/' && req.method === 'GET') {
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('Tunnel server is running');
+    return;
+  }
+
   const ws = [...tunnels].find(t => t.readyState === WebSocket.OPEN);
 
   if (!ws) {
@@ -44,28 +49,17 @@ const httpServer = http.createServer((req, res) => {
   });
 });
 
-// Render ke liye: WS aur HTTP ek hi port pe
-httpServer.listen(WS_PORT, () =>
-  console.log(`[server] Listening on :${WS_PORT}`)
-);
+// ── WebSocket Server (same port) ──────────────────────────────────────────────
+const wss = new WebSocketServer({ server: httpServer });
 
-httpServer.on("request", (req, res) => {
-  console.log("HTTP HIT:", req.url);
-
-  res.writeHead(200, { "content-type": "text/plain" });
-  res.end("Server is running");
-});
-
-// WS ko httpServer pe attach karo
-const wss2 = new WebSocketServer({ server: httpServer });
-
-wss2.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
   tunnels.add(ws);
-  console.log(`[+] Tunnel connected  (active: ${tunnels.size})`);
+  console.log(`[+] Tunnel connected (active: ${tunnels.size}) from ${req.socket.remoteAddress}`);
 
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
+
     const entry = pending.get(msg.id);
     if (!entry) return;
 
@@ -81,4 +75,13 @@ wss2.on('connection', (ws) => {
     tunnels.delete(ws);
     console.log(`[-] Tunnel disconnected (active: ${tunnels.size})`);
   });
+
+  ws.on('error', (err) => {
+    console.error('[!] WS error:', err.message);
+    tunnels.delete(ws);
+  });
 });
+
+httpServer.listen(PORT, () =>
+  console.log(`[server] Listening on :${PORT}`)
+);
